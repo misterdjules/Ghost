@@ -12,6 +12,7 @@ var _              = require('lodash'),
     path           = require('path'),
     Promise        = require('bluebird'),
     request        = require('request'),
+    util           = require('util'),
 
     escapeChar     = process.platform.match(/^win/) ? '^' : '\\',
     cwd            = process.cwd().replace(/( |\(|\))/g, escapeChar + '$1'),
@@ -171,7 +172,7 @@ var _              = require('lodash'),
             mochacli: {
                 options: {
                     ui: 'bdd',
-                    reporter: 'spec',
+                    reporter: grunt.option('reporter') || 'spec',
                     timeout: '15000'
                 },
 
@@ -580,13 +581,33 @@ var _              = require('lodash'),
         // This really ought to be refactored into a separate grunt task module
         grunt.registerTask('spawnCasperJS', function (target) {
 
-            target = _.contains(['client', 'frontend', 'setup'], target) ? target + '/' : undefined;
-
-            var done = this.async(),
+            var availableTestsSuites    = ['client', 'frontend', 'setup'],
+                defaultTestsSuites      = ['client', 'frontend'],
+                selectedTestsSuites     = [],
+                done                    = this.async(),
                 options = ['host', 'noPort', 'port', 'email', 'password'],
-                args = ['test']
-                    .concat(grunt.option('target') || target || ['client/', 'frontend/'])
-                    .concat(['--includes=base.js', '--log-level=debug', '--port=2369']);
+                args,
+                xunitOutputFilePattern = grunt.option('xunit-output-pattern'),
+                xunitOutputFile;
+
+            if (_.contains(availableTestsSuites, target)) {
+                selectedTestsSuites = [target];
+            } else {
+                selectedTestsSuites = defaultTestsSuites;
+            }
+
+            function appendSlash(testsSuiteName) {
+                return testsSuiteName + '/';
+            }
+
+            args = ['test']
+                .concat(grunt.option('target') || selectedTestsSuites.map(appendSlash))
+                .concat(['--includes=base.js', '--log-level=debug', '--port=2369']);
+
+            if (xunitOutputFilePattern) {
+                xunitOutputFile = util.format(xunitOutputFilePattern, selectedTestsSuites.join('-'));
+                args.push('--xunit=' + xunitOutputFile);
+            }
 
             // Forward parameters from grunt to casperjs
             _.each(options, function processOption(option) {
